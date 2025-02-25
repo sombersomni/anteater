@@ -1,12 +1,12 @@
+import cv2
+import os
+import sys
 import gymnasium as gym
 import pygame
 import numpy as np
 from gymnasium.envs.registration import EnvSpec
 from gymnasium.envs.toy_text.frozen_lake import FrozenLakeEnv
 from gymnasium.envs.toy_text.frozen_lake import generate_random_map
-import cv2
-import os
-import sys
 
 from src.utils.keyboard import handle_keyboard_input, ActionState
 from src.utils.file_tools import apply_action_to_files

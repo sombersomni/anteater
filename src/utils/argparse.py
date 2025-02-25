@@ -13,4 +13,11 @@ def create_arg_parser(
         default=output_dir,
         help='The directory where the gym render images for your episodes will be saved'
     )
+    parser.add_argument(
+        '--num-episodes',
+        type=int,
+        default=1,
+        help='The number of episodes to run the simulation'
+    )
+
     return parser
