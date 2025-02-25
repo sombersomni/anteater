@@ -37,6 +37,12 @@ def create_gym_arg_parser(
         default=100,
         help='The maximum number of moves per episode'
     )
+    parser.add_argument(
+        '--render-mode',
+        type=str,
+        default='rgb_array',
+        help='The rendering mode for the gym environment'
+    )
     return parser
 
 

@@ -12,7 +12,7 @@ from src.utils.file_tools import apply_action_to_files
 from src.utils.terminal import create_gym_arg_parser
 from src.utils.logs import setup_logger
 from src.env_wrappers.path_finder import PathFinderRewardWrapper
-from src.core.agent import Agent
+from src.core.agent import Agent, StateActionRewardPacket
 
 
 logger = setup_logger("Gym Simulation", f"{__name__}.log")
@@ -95,12 +95,16 @@ class Simulator:
                 )
                 # Get the current frame to render the environment
                 # If the episode has ended then we can reset to start a new episode
-                if terminated:
-                    logger.info(f"Episode {episode} terminated.")
+                if terminated or truncated:
+                    win_state = info.get("win_state", False)
+                    for i in range(self.env.action_space.n):
+                        # Add the final state to the queue
+                        self.agent.queue.append(
+                            StateActionRewardPacket(next_observation, i, (1 if win_state else -1))
+                        )
+                    total_rewards = self.agent.compute_rewards(win_state=win_state)
+                    logger.info(f"Episode {episode} terminated with total reward: {total_rewards}.")
                     logger.info(f"Win state: {info.get('win_state', False)}")
-                    total_rewards = self.agent.compute_rewards(
-                        win_state=info.get("win_state", False)
-                    )
                     if self.debug:
                         wandb.log({"train/reward": total_rewards})
                     break
@@ -114,7 +118,7 @@ def start_project():
     args = parser.parse_args()
     env = PathFinderRewardWrapper(
         FrozenLakeEnv(
-            render_mode='human',
+            render_mode=args.render_mode,
             is_slippery=False,
             map_name='4x4'
         )
@@ -128,10 +132,10 @@ def start_project():
             project="frozenlake",
             # track hyperparameters and run metadata
             config={
-            "discount_factor": args.discount_factor,
-            "architecture": ARCHITECTURE,
-            "dataset": "FrozenLake-v1",
-            "episodes": args.num_episodes,
+                "discount_factor": args.discount_factor,
+                "architecture": ARCHITECTURE,
+                "dataset": "FrozenLake-v1",
+                "episodes": args.num_episodes
             }
         )
     agent = Agent(

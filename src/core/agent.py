@@ -139,7 +139,11 @@ class Agent:
             )
         )
 
-    def compute_rewards(self, win_state: bool = False):
+    def compute_rewards(
+        self,
+        win_state: bool = False,
+        lr=0.1
+    ):
         """
         Computes the rewards for the current queue of packets.
         We apply a time-based reward decay to the rewards in the queue.
@@ -152,6 +156,7 @@ class Agent:
         Returns:
             float: The total rewards for the queue
         """
+        logger.info(f"Agenet queue before computing rewards: {self.queue}")
         queue_length = len(self.queue)
         logger.info(f"Queue length: {queue_length}")
         time_decay = np.pow(
@@ -159,12 +164,11 @@ class Agent:
             2
         )
         rewards = np.array([packet.reward for packet in self.queue])
-        rewards += (1 if win_state else -1)
         rewards *= time_decay # Apply time-based reward decay
+        rewards += (1 if win_state else -1) * time_decay
         for idx, packet in enumerate(self.queue):
-            self._rewards_by_action_state[(packet.state, packet.action)] += rewards[idx]
-        total_rewards = np.sum(rewards).item()
-        logger.info(f"Total rewards: {total_rewards}")
+            self._rewards_by_action_state[(packet.state, packet.action)] += lr * rewards[idx]
+        total_rewards = np.sum(rewards).item() / queue_length
         self.clear_queue()
         return total_rewards
 
