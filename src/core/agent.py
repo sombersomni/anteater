@@ -39,7 +39,7 @@ class Agent:
         epsilon
     ):
         if np.random.rand() > epsilon:
-            return self._env.action_space.sample().item()
+            return self._env.action_space.sample()
         # Get the action with the highest reward
         else:
             self.action = np.argmax(
@@ -113,7 +113,6 @@ class Agent:
         Returns:
             float: The total rewards for the queue
         """
-
         queue_length = len(self.queue)
         logger.info(f"Queue length: {queue_length}")
         time_decay = np.pow(
