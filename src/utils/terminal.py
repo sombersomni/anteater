@@ -19,7 +19,18 @@ def create_gym_arg_parser(
         default=1,
         help='The number of episodes to run the simulation'
     )
-
+    parser.add_argument(
+        '--discount-factor',
+        type=float,
+        default=0.9,
+        help='The discount factor for the reward function (gamma)'
+    )
+    parser.add_argument(
+        '--wb-debug',
+        type=bool,
+        default=False,
+        help='The debug flag to enable WandB metrics'
+    )
     return parser
 
 

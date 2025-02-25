@@ -1,9 +1,8 @@
 import os
 import cv2
-import logging
 from src.utils.file_tools import search_files
-from src.utils.logging import setup_logger
-from src.utils.argparse import create_playback_arg_parser
+from src.utils.logs import setup_logger
+from src.utils.terminal import create_playback_arg_parser
 
 
 # Set up the logger

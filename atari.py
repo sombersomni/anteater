@@ -10,8 +10,8 @@ from gymnasium.envs.toy_text.frozen_lake import generate_random_map
 
 from src.utils.keyboard import handle_keyboard_input, ActionState
 from src.utils.file_tools import apply_action_to_files
-import src.utils.argparse as tu
-from src.utils.logging import setup_logger
+import src.utils.terminal as tu
+from src.utils.logs import setup_logger
 
 
 
