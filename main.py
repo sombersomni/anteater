@@ -97,13 +97,14 @@ class Simulator:
         self.init_frame = self.env.render()
 
     def step(
-            self, player: Player,
-            observation,
-            epsilon=0.01,
-            gamma=0.9,
-            time_reward=0,
-            visted_state=False
-        ):
+        self,
+        player: Player,
+        observation,
+        epsilon=0.01,
+        gamma=0.9,
+        time_reward=0,
+        visted_state=False
+    ):
         player.set_env(self.env)
         action = player.select_action(observation, epsilon)
         next_observation, reward, terminated, truncated, info = self.env.step(action)
@@ -134,7 +135,7 @@ class Simulator:
         epsilon = starting_epsilon
         # Create a time reward that decreases over time
         time_rewards = np.pow(
-            np.linspace(0, 1, limit+1),
+            np.linspace(0, 1, limit + 1),
             2
         )
         for episode in tqdm(range(episodes)):
@@ -211,6 +212,7 @@ def start_project():
         env.close()
         cv2.destroyAllWindows()
         sys.exit(0)
+
 
 if __name__ == '__main__':
     start_project()
