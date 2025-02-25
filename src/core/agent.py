@@ -1,4 +1,6 @@
 import wandb
+from functools import partial
+from typing import Dict, Tuple, NewType, Callable, Any
 from dataclasses import dataclass
 from gymnasium import Env
 import numpy as np
@@ -10,6 +12,8 @@ from src.utils.plotting import get_reward_action_heatmaps
 logger = setup_logger("Gym Simulation", f"{__name__}.log")
 
 
+RewardMapping = NewType("RewardMapping", Dict[Tuple[int, int], float])
+
 @dataclass
 class StateActionRewardPacket:
     state: int
@@ -17,18 +21,58 @@ class StateActionRewardPacket:
     reward: int
 
 
+def time_diff_q_learning(
+    env: Env,
+    action,
+    reward: float,
+    observation,
+    next_observation,
+    rewards_by_action_state: RewardMapping,
+    epsilon=0.01,
+    gamma=0.9
+):
+    """
+    Calculates the Q-learning update for the rewards based on the
+    current reward and the maximum future reward.
+    """
+    max_future_reward = np.max(
+        [
+            rewards_by_action_state.get(
+                (next_observation, a),
+                0
+            ) for a in range(env.action_space.n)
+        ]
+    ).item()
+    previous_reward = rewards_by_action_state.get(
+        (observation, action), 0
+    )
+    new_reward = reward + (gamma * max_future_reward) - previous_reward
+    reward_grade = (1 - epsilon) * previous_reward + (epsilon) * new_reward
+    return reward_grade
+
+
 class Agent:
     """
     The agent class is responsible for selecting actions
     and updating the rewards for the actions based on the
     rewards received from the environment. The agent uses"""
-    def __init__(self, env: Env = None, debug: bool = False):
+    def __init__(
+        self,
+        env: Env = None,
+        name="Agent.v1",
+        debug: bool = False,
+        reward_fn: Callable[
+            [Env, int, Any, Any, int, float, float],
+            float
+        ] = time_diff_q_learning
+    ):
         self._env = env
         self._rewards_by_action_state = defaultdict(int)
-        self.action = None
-        self.ended = False
+        self.reward_fn = partial(reward_fn, self._env)
         self.queue = []
+        self.action = None
         self.debug = debug
+        self.name = name
 
     def set_env(self, env: Env):
         self._env = env
@@ -57,7 +101,7 @@ class Agent:
         reward: int,
         observation,
         next_observation,
-        action,
+        action: int,
         gamma=0.9,
         epsilon=0.01
     ):
@@ -78,20 +122,15 @@ class Agent:
         Returns:
             None
         """
-        max_future_reward = np.max(
-            [
-                self._rewards_by_action_state.get(
-                    (next_observation, a),
-                    0
-                ) for a in range(self._env.action_space.n)
-            ]
-        ).item()
-        previous_reward = self._rewards_by_action_state.get(
-            (observation, action), 0
+        reward_grade = self.reward_fn(
+            action,
+            reward,
+            observation,
+            next_observation,
+            self._rewards_by_action_state,
+            epsilon=epsilon,
+            gamma=gamma
         )
-        new_reward = reward + (gamma * max_future_reward) - previous_reward
-        self._rewards_by_action_state[(observation, action)] = new_reward
-        reward_grade = (1 - epsilon) * previous_reward + (epsilon) * new_reward
         self.queue.append(
             StateActionRewardPacket(
                 observation,
@@ -145,4 +184,4 @@ class Agent:
             })
 
     def __str__(self):
-        return f"Action: {self.action}, Ended: {self.ended}"
+        return f"{self.name} | current action: {self.action}"

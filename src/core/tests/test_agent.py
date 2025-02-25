@@ -30,7 +30,6 @@ def test_init():
     assert isinstance(agent._rewards_by_action_state, defaultdict)
     assert agent._rewards_by_action_state.default_factory == int
     assert agent.action is None
-    assert agent.ended == False
     assert agent.queue == []
     assert agent.debug == True
 
@@ -150,5 +149,4 @@ def test_str():
     env = MockEnv(n_actions=4)
     agent = Agent(env)
     agent.action = 1
-    agent.ended = True
-    assert str(agent) == "Action: 1, Ended: True"
+    assert str(agent) == "Agent.v1 | current action: 1"

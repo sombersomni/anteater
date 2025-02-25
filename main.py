@@ -105,7 +105,6 @@ class Simulator:
                 idx += 1
                 t += 1
                 observation = next_observation
-                logger.info(f"Episode: {episode}, Epsilon: {epsilon}")
         self.agent.log_metrics()
 
 def start_project():
