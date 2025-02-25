@@ -1,24 +1,40 @@
 import os
 import cv2
-from src.utils.file_tools import count_matching_files
+import logging
+from src.utils.file_tools import search_files
+from src.utils.logging import setup_logger
+from src.utils.argparse import create_playback_arg_parser
 
+
+# Set up the logger
+logger = setup_logger("Playback", f"{__name__}.log")
 
 # Count the number of frames saved
 output_dir = 'out'
-if not os.path.isdir(output_dir):
-    raise ValueError(f"Folder '{output_dir}' does not exist")
-iterations = count_matching_files(output_dir, '*.png', 'extension')
-if iterations == 0:
-    raise ValueError(f"No frames found in '{output_dir}'")
-print(f"Found {iterations} frames in '{output_dir}'")
-# Replay the saved frames
-for i in range(iterations):
-    frame = cv2.imread(
-        os.path.join(
-            'out',
-            f'FrozenLake-v1_{i:04d}.png'
-        )
-    )
-    cv2.imshow('Render', frame)
-    cv2.waitKey(100)
-cv2.destroyAllWindows()
+
+def playback_images(
+    images_dir: str,
+    fps: int = 12
+):
+    if not os.path.isdir(images_dir):
+        raise ValueError(f"Folder '{images_dir}' does not exist")
+    files_found = search_files(images_dir, '*.png')
+    iterations = len(files_found)
+    if iterations == 0:
+        raise ValueError(f"No frames found in '{images_dir}'")
+    logger.info(f"Found {iterations} frames in '{images_dir}'")
+    # Replay the saved frames
+    for file_path in files_found:
+        frame = cv2.imread(file_path)
+        if frame is None:
+            logger.error(f"Failed to read frame from '{file_path}'")
+            continue
+        cv2.imshow('Render', frame)
+        cv2.waitKey(fps)
+    cv2.destroyAllWindows()
+
+
+if __name__ == '__main__':
+    parser = create_playback_arg_parser()
+    args = parser.parse_args()
+    playback_images(args.images_dir, args.fps)

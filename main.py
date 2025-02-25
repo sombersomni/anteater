@@ -11,11 +11,11 @@ import os
 import sys
 
 from src.utils.file_tools import apply_action_to_files
-from src.utils.argparse import create_arg_parser
+from src.utils.argparse import create_gym_arg_parser
 from src.utils.logging import setup_logger
 
 
-logger = setup_logger("FrozenLake", "frozenlake.log")
+logger = setup_logger("Gym Simulation", f"{__name__}.log")
 
 
 class Player:
@@ -57,9 +57,22 @@ class Player:
         epsilon=0.01
     ):
         """
-        Calculates the new reward based on the previous reward and the maximum future reward.
-        The maximum future reward is calculated by getting the maximum reward for the next observation
-        and all possible actions. The new reward is then calculated by adding the reward to the maximum future reward
+        Calculates the new reward based on the previous reward
+        and the maximum future reward. The maximum future reward
+        is calculated by getting the maximum reward for the next
+        observation and all possible actions. The new reward is
+        then calculated by adding the reward to the maximum future reward
+
+        Args:
+            reward (int): The reward for the current action
+            observation (int): The current observation
+            next_observation (int): The next observation
+            action (int): The current action
+            gamma (float): The discount factor
+            epsilon (float): The learning rate
+
+        Returns:
+            None
         """
         max_future_reward = np.max(
             [
@@ -186,7 +199,7 @@ def start_project():
     )
     simulator = Simulator(env)
     # Reset the environment to generate the first observation
-    parser = create_arg_parser()
+    parser = create_gym_arg_parser()
     args = parser.parse_args()
     # Create the output directory if it does not exist
     os.makedirs(args.output_dir, exist_ok=True)
