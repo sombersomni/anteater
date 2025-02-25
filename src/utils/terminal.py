@@ -31,6 +31,12 @@ def create_gym_arg_parser(
         default=False,
         help='The debug flag to enable WandB metrics'
     )
+    parser.add_argument(
+        '--move-limit',
+        type=int,
+        default=100,
+        help='The maximum number of moves per episode'
+    )
     return parser
 
 

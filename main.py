@@ -66,7 +66,7 @@ class Simulator:
     def start(
         self,
         episodes: int = EPOCHS,
-        limit: int = 100,
+        move_limit: int = 100,
         gamma: float = GAMMA_FACTOR,
         starting_epsilon: float = 0.01
     ):
@@ -74,15 +74,15 @@ class Simulator:
         epsilon = starting_epsilon
         for episode in tqdm(range(episodes)):
             observation, info = self.reset()
-            t = 0
+            num_steps_taken = 0
             done = False
             epsilon = max(starting_epsilon, (episode / episodes) ** 2)
-            earned_rewards = 0
+            total_rewards = 0
             logger.info(f"Starting episode: {episode}")
-            while not done or t < limit:
+            while not done or num_steps_taken < move_limit:
                 # step (transition) through the environment with the action
                 # receiving the next observation, reward and if the episode has terminated or truncated
-                if t >= limit:
+                if num_steps_taken >= move_limit:
                     logger.info("Episode truncated.")
                     break
                 if episodes <= 0:
@@ -95,15 +95,17 @@ class Simulator:
                 )
                 # Get the current frame to render the environment
                 # If the episode has ended then we can reset to start a new episode
-                earned_rewards += reward
                 if terminated:
-                    self.agent.compute_rewards(win_state=info.get("win_state", False))
-                    logger.info(f"Episode: {episode}, Reward: {earned_rewards}")
+                    logger.info(f"Episode {episode} terminated.")
+                    logger.info(f"Win state: {info.get('win_state', False)}")
+                    total_rewards = self.agent.compute_rewards(
+                        win_state=info.get("win_state", False)
+                    )
                     if self.debug:
-                        wandb.log({"train/reward": earned_rewards})
+                        wandb.log({"train/reward": total_rewards})
                     break
                 idx += 1
-                t += 1
+                num_steps_taken += 1
                 observation = next_observation
         self.agent.log_metrics()
 
@@ -118,19 +120,20 @@ def start_project():
         )
     )
     # start a new wandb run to track this script
-    wandb.init(
-        # set the wandb entity where your project will be logged (generally your team name)
-        entity="sombersomni-sloparse-labs",
-        # set the wandb project where this run will be logged
-        project="frozenlake",
-        # track hyperparameters and run metadata
-        config={
-        "discount_factor": args.discount_factor,
-        "architecture": ARCHITECTURE,
-        "dataset": "FrozenLake-v1",
-        "episodes": args.num_episodes,
-        }
-    )
+    if args.wb_debug:
+        wandb.init(
+            # set the wandb entity where your project will be logged (generally your team name)
+            entity="sombersomni-sloparse-labs",
+            # set the wandb project where this run will be logged
+            project="frozenlake",
+            # track hyperparameters and run metadata
+            config={
+            "discount_factor": args.discount_factor,
+            "architecture": ARCHITECTURE,
+            "dataset": "FrozenLake-v1",
+            "episodes": args.num_episodes,
+            }
+        )
     agent = Agent(
         env=env,
         debug=args.wb_debug
@@ -150,7 +153,7 @@ def start_project():
     try:
         simulator.start(
             episodes=args.num_episodes,
-            limit=20
+            move_limit=args.move_limit,
         )
     except KeyboardInterrupt:
         logger.info("Stopped by user.")
@@ -158,7 +161,8 @@ def start_project():
         logger.warning(f"Error: {e}")
         sys.exit(1)
     finally:
-        wandb.finish()
+        if args.wb_debug:
+            wandb.finish()
         env.close()
         cv2.destroyAllWindows()
         sys.exit(0)

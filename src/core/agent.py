@@ -159,7 +159,8 @@ class Agent:
             2
         )
         rewards = np.array([packet.reward for packet in self.queue])
-        rewards *= time_decay * (1 if win_state else -1)
+        rewards += (1 if win_state else -1)
+        rewards *= time_decay # Apply time-based reward decay
         for idx, packet in enumerate(self.queue):
             self._rewards_by_action_state[(packet.state, packet.action)] += rewards[idx]
         total_rewards = np.sum(rewards).item()
@@ -168,7 +169,7 @@ class Agent:
         return total_rewards
 
     def clear_queue(self):
-        logger.debug("Clearing observation/action queue")
+        logger.info("Clearing observation/action queue")
         self.queue = []
 
     def log_metrics(self):
