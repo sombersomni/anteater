@@ -116,7 +116,7 @@ class Simulator:
 def start_project():
     parser = create_gym_arg_parser()
     args = parser.parse_args()
-    env = PathFinderRewardWrapper(
+    wrapped_env = PathFinderRewardWrapper(
         FrozenLakeEnv(
             render_mode=args.render_mode,
             is_slippery=False,
@@ -139,11 +139,11 @@ def start_project():
             }
         )
     agent = Agent(
-        env=env,
+        env=wrapped_env,
         debug=args.wb_debug
     )
     simulator = Simulator(
-        env=env,
+        env=wrapped_env,
         agent=agent,
         debug=args.wb_debug
     )
@@ -155,6 +155,7 @@ def start_project():
         file_action=os.remove
     )
     try:
+        print(wrapped_env.observation_space)
         simulator.start(
             episodes=args.num_episodes,
             move_limit=args.move_limit,
@@ -167,7 +168,7 @@ def start_project():
     finally:
         if args.wb_debug:
             wandb.finish()
-        env.close()
+        wrapped_env.close()
         cv2.destroyAllWindows()
         sys.exit(0)
 

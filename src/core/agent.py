@@ -164,7 +164,6 @@ class Agent:
             2
         )
         rewards = np.array([packet.reward for packet in self.queue])
-        rewards *= time_decay # Apply time-based reward decay
         rewards += (1 if win_state else -1) * time_decay
         for idx, packet in enumerate(self.queue):
             self._rewards_by_action_state[(packet.state, packet.action)] += lr * rewards[idx]
