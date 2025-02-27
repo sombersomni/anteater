@@ -1,12 +1,14 @@
 import wandb
-from functools import partial
-from typing import Dict, Tuple, NewType, Callable, Any
-from dataclasses import dataclass
 from gymnasium import Env
 import numpy as np
+from functools import partial
+from typing import Dict, Tuple, NewType, Callable, Any, Optional
+from dataclasses import dataclass
+
 from collections import defaultdict
 from src.utils.logs import setup_logger
 from src.utils.plotting import get_reward_action_heatmaps
+from src.storage.base import ImageStorage
 
 
 logger = setup_logger("Gym Simulation", f"{__name__}.log")
@@ -14,11 +16,18 @@ logger = setup_logger("Gym Simulation", f"{__name__}.log")
 
 RewardMapping = NewType("RewardMapping", Dict[Tuple[int, int], float])
 
+
+@dataclass
+class ObservationInfoPacket:
+    render_image: Optional[np.ndarray] = None
+
+
 @dataclass
 class StateActionRewardPacket:
     state: int
     action: int
     reward: int
+    observation_info: Optional[ObservationInfoPacket] = None
 
 
 def time_diff_q_learning(
@@ -69,10 +78,23 @@ class Agent:
         self._env = env
         self._rewards_by_action_state = defaultdict(int)
         self.reward_fn = partial(reward_fn, self._env)
-        self.queue = []
         self.action = None
         self.debug = debug
         self.name = name
+        # Storage
+        self.storage = ImageStorage()
+        self.memory = []
+
+    def before_reset_hook(self):
+        logger.info("Running before reset hook")
+        self.storage.write_multiple(
+            "agent_memory_test",
+            (packet.observation_info.render_image for packet in self.memory)
+        )
+
+    def add_to_memory(self, packet: StateActionRewardPacket):
+        self.memory.append(packet)
+        logger.info(f"Added packet to memory: {packet}")
 
     def set_env(self, env: Env):
         self._env = env
@@ -131,11 +153,14 @@ class Agent:
             epsilon=epsilon,
             gamma=gamma
         )
-        self.queue.append(
+        self.memory.append(
             StateActionRewardPacket(
                 observation,
                 action,
-                reward_grade
+                reward_grade,
+                observation_info=ObservationInfoPacket(
+                    render_image=self._env.render()
+                )
             )
         )
 
@@ -145,8 +170,8 @@ class Agent:
         lr=0.1
     ):
         """
-        Computes the rewards for the current queue of packets.
-        We apply a time-based reward decay to the rewards in the queue.
+        Computes the rewards for the current memory of packets.
+        We apply a time-based reward decay to the rewards in the memory.
         If it is a win state, we multiply the rewards by 1, otherwise -1,
         ensuring that the rewards are negative for losing states.
 
@@ -154,26 +179,26 @@ class Agent:
             win_state (bool): Did the agent win the game?
 
         Returns:
-            float: The total rewards for the queue
+            float: The total rewards in the window of memory
         """
-        logger.info(f"Agenet queue before computing rewards: {self.queue}")
-        queue_length = len(self.queue)
-        logger.info(f"Queue length: {queue_length}")
-        time_decay = np.pow(
-            np.linspace(0, 1, queue_length),
+        logger.info(f"Agenet memory before computing rewards: {self.memory}")
+        memory_length = len(self.memory)
+        logger.info(f"Queue length: {memory_length}")
+        hindsight = np.pow(
+            np.linspace(0, 1, memory_length),
             2
         )
-        rewards = np.array([packet.reward for packet in self.queue])
-        rewards += (1 if win_state else -1) * time_decay
-        for idx, packet in enumerate(self.queue):
+        rewards = np.array([packet.reward for packet in self.memory])
+        rewards += (1 if win_state else -1) * hindsight
+        for idx, packet in enumerate(self.memory):
             self._rewards_by_action_state[(packet.state, packet.action)] += lr * rewards[idx]
-        total_rewards = np.sum(rewards).item() / queue_length
-        self.clear_queue()
+        total_rewards = np.sum(rewards).item() / memory_length
         return total_rewards
 
-    def clear_queue(self):
-        logger.info("Clearing observation/action queue")
-        self.queue = []
+    def reset(self):
+        logger.info("Clearing observation/action memory")
+        self.before_reset_hook()
+        self.memory = []
 
     def log_metrics(self):
         if self.debug:
