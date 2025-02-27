@@ -63,6 +63,9 @@ class Simulator:
     def reset(self):
         return self.env.reset()
 
+    def render(self):
+        return self.env.render()
+
     def start(
         self,
         episodes: int = EPOCHS,
@@ -82,9 +85,6 @@ class Simulator:
             while not done or num_steps_taken < move_limit:
                 # step (transition) through the environment with the action
                 # receiving the next observation, reward and if the episode has terminated or truncated
-                if num_steps_taken >= move_limit:
-                    logger.info("Episode truncated.")
-                    break
                 if episodes <= 0:
                     logger.warning("Episodes must be greater than 0.")
                     break
@@ -98,25 +98,28 @@ class Simulator:
                 if terminated or truncated:
                     win_state = info.get("win_state", False)
                     for i in range(self.env.action_space.n):
-                        # Add the final state to the queue
-                        self.agent.queue.append(
+                        # Add the final state to agent memory
+                        self.agent.add_to_memory(
                             StateActionRewardPacket(next_observation, i, (1 if win_state else -1))
                         )
                     total_rewards = self.agent.compute_rewards(win_state=win_state)
                     logger.info(f"Episode {episode} terminated with total reward: {total_rewards}.")
                     logger.info(f"Win state: {info.get('win_state', False)}")
+                    logger.info(f"Total steps taken: {num_steps_taken}.")
                     if self.debug:
                         wandb.log({"train/reward": total_rewards})
+                    self.agent.reset()
                     break
                 idx += 1
                 num_steps_taken += 1
                 observation = next_observation
         self.agent.log_metrics()
 
+
 def start_project():
     parser = create_gym_arg_parser()
     args = parser.parse_args()
-    env = PathFinderRewardWrapper(
+    wrapped_env = PathFinderRewardWrapper(
         FrozenLakeEnv(
             render_mode=args.render_mode,
             is_slippery=False,
@@ -139,11 +142,11 @@ def start_project():
             }
         )
     agent = Agent(
-        env=env,
+        env=wrapped_env,
         debug=args.wb_debug
     )
     simulator = Simulator(
-        env=env,
+        env=wrapped_env,
         agent=agent,
         debug=args.wb_debug
     )
@@ -167,7 +170,7 @@ def start_project():
     finally:
         if args.wb_debug:
             wandb.finish()
-        env.close()
+        wrapped_env.close()
         cv2.destroyAllWindows()
         sys.exit(0)
 

@@ -27,14 +27,14 @@ class PathFinderRewardWrapper(Wrapper):
     
     def step(self, action):
         obs, reward, terminated, truncated, info = self.env.step(action)
+        
         row, col = obs % self.grid_size, obs // self.grid_size
         agent_current_position = np.array((row, col))
         agent_goal_position = np.array(self.goal_position)
-        vistor_reward = (0 if obs in self._visited else 0.1)
+        vistor_reward = (0 if obs in self._visited else 1 / self.env.observation_space.n)
         distance = np.linalg.norm(agent_goal_position - agent_current_position)
         distance_reward = 1 / (distance + 1)
-        exploration_reward = min(0, sigmoid(self.max_steps - (len(self._visited) + 1)))
-        new_reward = reward + vistor_reward + distance_reward + exploration_reward
+        new_reward = reward + vistor_reward + distance_reward
         self._visited.add(obs)
         info["win_state"] = (
             obs == self.goal_position[0] * self.grid_size + self.goal_position[1]
@@ -44,3 +44,6 @@ class PathFinderRewardWrapper(Wrapper):
     def reset(self):
         self._visited.clear()
         return self.env.reset()
+
+    def render(self):
+        return self.env.render()
