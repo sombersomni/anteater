@@ -68,7 +68,7 @@ class Agent:
     def __init__(
         self,
         env: Env = None,
-        name="Agent.v1",
+        name="Agent-v1",
         debug: bool = False,
         reward_fn: Callable[
             [Env, int, Any, Any, int, float, float],
@@ -85,10 +85,14 @@ class Agent:
         self.storage = ImageStorage()
         self.memory = []
 
-    def before_reset_hook(self):
+    def before_reset_hook(self, current_episode: int = 0):
+        """
+        This hook is called before the agent's memory is reset.
+        It is typically used to save the current memory to storage.
+        """
         logger.info("Running before reset hook")
         self.storage.write_multiple(
-            "agent_memory_test",
+            f"{self.name}_{current_episode}_run",
             (packet.observation_info.render_image for packet in self.memory)
         )
 

@@ -44,12 +44,25 @@ class Storage(ABC):
 # Example implementation (optional) to demonstrate usage:
 class ImageStorage(Storage):
     """A simple file-based storage implementation."""
-    def write_multiple(self, key: str, values: Iterable[np.array]) -> bool:
+    def __init__(
+        self,
+        output_dir: str = "out",
+        extension: str = ".png"
+    ):
+        self.output_dir = output_dir
+        self.extension = extension
+
+    def write_multiple(
+        self,
+        key: str,
+        values: Iterable[np.array]
+    ) -> bool:
         try:
             all_sucess = save_multiple_cv2_images(
                 values,
+                output_dir=self.output_dir,
                 base_name=key,
-                extension=".png"
+                extension=self.extension
             )
             return all_sucess
         except Exception:
