@@ -1,4 +1,5 @@
 import wandb
+import torch
 from gymnasium import Env
 from tqdm import tqdm
 from gymnasium.envs.toy_text.frozen_lake import (
@@ -12,7 +13,7 @@ from src.utils.file_tools import apply_action_to_files
 from src.utils.terminal import create_gym_arg_parser
 from src.utils.logs import setup_logger
 from src.env_wrappers.path_finder import PathFinderRewardWrapper
-from src.core.agent import Agent, StateActionRewardPacket
+from src.core.agent import Agent, StateActionRewardPacket, ObservationInfoPacket
 
 
 logger = setup_logger("Gym Simulation", f"{__name__}.log")
@@ -48,7 +49,10 @@ class Simulator:
         epsilon=0.01,
         gamma=0.9,
     ):
-        action = self.agent.select_action(observation, epsilon)
+        action = self.agent.select_action(
+            observation,
+            epsilon
+        )
         next_observation, reward, terminated, truncated, info = self.env.step(action)
         self.agent.update(
             reward,
@@ -68,8 +72,8 @@ class Simulator:
 
     def start(
         self,
-        episodes: int = EPOCHS,
-        move_limit: int = 100,
+        episodes: int = 1,
+        move_limit: int = 10,
         gamma: float = GAMMA_FACTOR,
         starting_epsilon: float = 0.01
     ):
@@ -82,33 +86,59 @@ class Simulator:
             epsilon = max(starting_epsilon, (episode / episodes) ** 2)
             total_rewards = 0
             logger.info(f"Starting episode: {episode}")
-            while not done or num_steps_taken < move_limit:
+            while num_steps_taken < move_limit:
+                logger.info(f"Step: {num_steps_taken}")
+                logger.debug(f"Move limit: {move_limit}")
                 # step (transition) through the environment with the action
                 # receiving the next observation, reward and if the episode has terminated or truncated
                 if episodes <= 0:
                     logger.warning("Episodes must be greater than 0.")
                     break
-                next_observation, reward, terminated, truncated, info, = self.step(
+                action = self.agent.select_action(
                     observation,
-                    epsilon=epsilon,
-                    gamma=gamma
+                    epsilon
                 )
+                next_observation, reward, terminated, truncated, info = self.env.step(action)
+                self.agent.update(
+                    reward,
+                    observation,
+                    next_observation,
+                    action,
+                    gamma=gamma,
+                    epsilon=epsilon
+                )
+                total_rewards += reward
                 # Get the current frame to render the environment
                 # If the episode has ended then we can reset to start a new episode
                 if terminated or truncated:
+                    logger.info(f"Episode {episode} terminated with total reward: {total_rewards}.")
                     win_state = info.get("win_state", False)
-                    for i in range(self.env.action_space.n):
-                        # Add the final state to agent memory
-                        self.agent.add_to_memory(
-                            StateActionRewardPacket(next_observation, i, (1 if win_state else -1))
+                    # Add the final state to agent memory
+                    self.agent.add_to_memory(
+                        StateActionRewardPacket(
+                            next_observation,
+                            action,
+                            (1 if win_state else -1),
+                            observation_info=ObservationInfoPacket(
+                                render_image=self.env.render()
+                            )
                         )
-                    total_rewards = self.agent.compute_rewards(win_state=win_state)
+                    )
+                    total_reward_loss = self.agent.train_rewards(win_state=win_state)
+                    total_action_loss = self.agent.train_actions(win_state=win_state)
                     logger.info(f"Episode {episode} terminated with total reward: {total_rewards}.")
                     logger.info(f"Win state: {info.get('win_state', False)}")
                     logger.info(f"Total steps taken: {num_steps_taken}.")
                     if self.debug:
-                        wandb.log({"train/reward": total_rewards})
+                        wandb.log({
+                            "total_reward": total_rewards,
+                            "total_reward_loss": total_reward_loss,
+                            "total_action_loss": total_action_loss
+                        })
                     self.agent.reset()
+                    idx += 1
+                    num_steps_taken += 1
+                    observation = next_observation
                     break
                 idx += 1
                 num_steps_taken += 1

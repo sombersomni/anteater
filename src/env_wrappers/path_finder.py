@@ -27,7 +27,6 @@ class PathFinderRewardWrapper(Wrapper):
     
     def step(self, action):
         obs, reward, terminated, truncated, info = self.env.step(action)
-        
         row, col = obs % self.grid_size, obs // self.grid_size
         agent_current_position = np.array((row, col))
         agent_goal_position = np.array(self.goal_position)
