@@ -8,4 +8,4 @@ You can run the "FrozenLake" test in main to see an example of Temporal Differen
 
 `python3 main.py --num-episodes=100 --render_mode=human --move-limit=30`
 
->Render mode on hum will slow your training down.
+>Render mode on human will slow your training down.
