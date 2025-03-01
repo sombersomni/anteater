@@ -180,17 +180,6 @@ class Agent:
         self.memory = []
         # Models
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.reward_model = build_reward_model().to(self.device)
-        self.action_model = build_action_model().to(self.device)
-        self.reward_optimizer = torch.optim.Adam(self.reward_model.parameters(), lr=0.001)
-        self.reward_criterion = torch.nn.BCELoss()
-        self.action_optimizer = torch.optim.Adam(self.action_model.parameters(), lr=0.001)
-        self.action_criterion = torch.nn.CrossEntropyLoss()
-        self.reward_fn = partial(
-            reward_fn,
-            env=self._env,
-            reward_model = self.reward_model
-        )
 
     def before_reset_hook(self, current_episode: int = 0):
         """
@@ -210,26 +199,20 @@ class Agent:
     def set_env(self, env: Env):
         self._env = env
 
-    def model_policy(
+    def predict_reward(
         self,
-        observation
+        observation,
+        action,
+        reward,
     ) -> int:
         """
         Returns the action with the highest reward for the current observation.
         """
-        render_image = self._env.render()
-        image = self.action_model.preprocess(
-            render_image
+        self.brain.predict_reward(
+            observation,
+            action,
+            reward
         )
-        image = image.to(self.device)
-        logger.debug(f"Image shape before processing: {image.shape}")
-        # Get action probabilities from action model
-        action_logits = self.action_model(image)
-        action_probs = self.action_model.post_process(action_logits)
-        # Get action with highest probability
-        action_pred = torch.argmax(action_probs, dim=1).item()
-        logger.info(f"Action predicted: {action_pred}")
-        return action_pred
     
     def model_reward(
         self,
