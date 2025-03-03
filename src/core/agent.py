@@ -168,7 +168,6 @@ class Agent:
         env: Env = None,
         name="Agent-v1",
         debug: bool = False,
-        reward_fn = time_diff_q_learning_v2
     ):
         self._env = env
         self._rewards_by_action_state = defaultdict(int)
@@ -180,6 +179,7 @@ class Agent:
         self.memory = []
         # Models
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.policy = None # Policy for making decisions
 
     def before_reset_hook(self, current_episode: int = 0):
         """
@@ -234,8 +234,11 @@ class Agent:
         observation,
         epsilon
     ):
-        return self.model_policy(
-            observation
+        return self.policy.get_action(
+            observation,
+            self._env.action_space.n,
+            self._rewards_by_action_state,
+            epsilon=epsilon
         )
 
     def update(
