@@ -53,3 +53,4 @@ if __name__ == "__main__":
     img_gray = read_cv2_image("test_output/frame_001.png", cv2.IMREAD_GRAYSCALE)
     if img_gray is not None:
         logger.debug(f"Loaded grayscale image with shape: {img_gray.shape}")
+

@@ -14,7 +14,7 @@ def create_gym_arg_parser(
         help='The directory where the gym render images for your episodes will be saved'
     )
     parser.add_argument(
-        '--num-episodes',
+        '--episodes',
         type=int,
         default=1,
         help='The number of episodes to run the simulation'
@@ -34,7 +34,7 @@ def create_gym_arg_parser(
     parser.add_argument(
         '--move-limit',
         type=int,
-        default=100,
+        default=30,
         help='The maximum number of moves per episode'
     )
     parser.add_argument(

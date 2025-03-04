@@ -13,12 +13,7 @@ from collections import defaultdict
 from src.utils.logs import setup_logger
 from src.utils.plotting import get_reward_action_heatmaps
 from src.storage.base import ImageStorage
-from src.models.ResNet16 import (
-    build_action_model,
-    build_reward_model,
-    ResNet16
-)
-
+from src.models.q_policy_basic import QPolicy, QPolicyBasic
 
 logger = setup_logger("Gym Simulation", f"{__name__}.log")
 
@@ -27,110 +22,29 @@ RewardMapping = NewType("RewardMapping", Dict[Tuple[int, int], float])
 
 
 @dataclass
-class ObservationInfoPacket:
-    render_image: Optional[np.ndarray] = None
+class ObservationInfo:
+    render_image: torch.Tensor
 
 
 @dataclass
-class StateActionRewardPacket:
-    state: int
+class MemoryPacket:
+    observation: Any
     action: int
-    reward: int
-    observation_info: Optional[ObservationInfoPacket] = None
+    reward: float
+    info: Optional[ObservationInfo] = None
+    done: bool = False
 
-    def __str__(self):
-        return (
-            f"[Packet] State: {self.state} | "
-            f"Action: {self.action} | Reward: {self.reward}"
-        )
-
-    def __repr__(self):
-        return self.__str__()
-
-
-def time_diff_q_learning(
-    env: Env,
-    action,
-    reward: float,
-    observation,
-    next_observation,
-    rewards_by_action_state: RewardMapping,
-    epsilon=0.01,
-    gamma=0.9
-):
-    """
-    Calculates the Q-learning update for the rewards based on the
-    current reward and the maximum future reward.
-    """
-    max_future_reward = np.max(
-        [
-            rewards_by_action_state.get(
-                (next_observation, a),
-                0
-            ) for a in range(env.action_space.n)
-        ]
-    ).item()
-    previous_reward = rewards_by_action_state.get(
-        (observation, action), 0
-    )
-    new_reward = reward + (gamma * max_future_reward) - previous_reward
-    reward_grade = (1 - epsilon) * previous_reward + (epsilon) * new_reward
-    return reward_grade
-
-
-def time_diff_q_learning_v2(
-    action,
-    reward: float,
-    observation,
-    next_observation,
-    env: Env = None,
-    reward_model: ResNet16 = None,
-    epsilon=0.01,
-    gamma=0.9
-):
-    """
-    Calculates the Q-learning update for the rewards based on the
-    current reward and the maximum future reward.
-    """
-    logger.info("Calculating Q-learning update for (observation, action)")
-    logger.info(f"Observation: {observation} | Action: {action}")
-    image = reward_model.preprocess(
-        env.render()
-    )
-    image = image.to("cuda" if torch.cuda.is_available() else "cpu")
-    future_reward = reward_model(image)
-    future_reward_value = reward_model.post_process(future_reward).item()
-    logger.info(f"Future reward: {future_reward_value}")
-    new_reward = (reward + (gamma * future_reward_value))
-    logger.info(f"New reward: {new_reward}")
-    return new_reward
-
-
-def greedy_policy(
-    observation,
-    action_space_size,
-    rewards_by_action_state: RewardMapping,
-):
-    """
-    Returns the action with the highest reward for the current observation.
-    """
-    return np.argmax(
-        [
-            rewards_by_action_state.get((observation, a), 0)
-            for a in range(action_space_size)
-        ]
-    ).item()
 
 
 def format_packets_to_image_batch(
-    packets: List[StateActionRewardPacket],
+    packets: List[MemoryPacket],
     device='cuda' if torch.cuda.is_available() else 'cpu'
 ) -> torch.Tensor:
     """
     Formats the observation for the model.
     """
     images = torch.stack(
-        [packet.observation_info.render_image for packet in packets],
+        [packet.info.render_image for packet in packets],
         dtype=torch.float32
     ).to(device)
     # Images should be 4D tensors (batch_size, channels, height, width)
@@ -142,20 +56,20 @@ def format_packets_to_image_batch(
     return images
 
 
-def image_reward_policy(
-    reward_model: ResNet16,
-    image: torch.Tensor
-):
-    C, W, H = image.shape
-    images = image.reshape(1, C, W, H)
-    # Get predicted reward (Q-value) from reward model
-    reward_logits = reward_model(images)
-    reward_probs = reward_model.post_process(reward_logits),
-    reward_pred = torch.argmax(
-        reward_probs,
-        dim=1
-    ).item()
-    return reward_pred
+# def image_reward_policy(
+#     reward_model: ResNet16,
+#     image: torch.Tensor
+# ):
+#     C, W, H = image.shape
+#     images = image.reshape(1, C, W, H)
+#     # Get predicted reward (Q-value) from reward model
+#     reward_logits = reward_model(images)
+#     reward_probs = reward_model.post_process(reward_logits),
+#     reward_pred = torch.argmax(
+#         reward_probs,
+#         dim=1
+#     ).item()
+#     return reward_pred
 
 
 class Agent:
@@ -168,18 +82,18 @@ class Agent:
         env: Env = None,
         name="Agent-v1",
         debug: bool = False,
+        policy: QPolicy = None,
     ):
         self._env = env
-        self._rewards_by_action_state = defaultdict(int)
         self.action = None
         self.debug = debug
         self.name = name
         # Storage
         self.storage = ImageStorage()
-        self.memory = []
+        self.memory: List[MemoryPacket]  = []
         # Models
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.policy = None # Policy for making decisions
+        self.policy = QPolicyBasic(env) if policy is None else policy
 
     def before_reset_hook(self, current_episode: int = 0):
         """
@@ -189,10 +103,10 @@ class Agent:
         logger.info("Running before reset hook")
         self.storage.write_multiple(
             f"{self.name}_{current_episode}_run",
-            (packet.observation_info.render_image for packet in self.memory)
+            (packet.info.render_image for packet in self.memory)
         )
 
-    def add_to_memory(self, packet: StateActionRewardPacket):
+    def add_to_memory(self, packet: MemoryPacket):
         self.memory.append(packet)
         logger.info(f"Added packet to memory: {packet}")
 
@@ -201,45 +115,36 @@ class Agent:
 
     def predict_reward(
         self,
+        next_observation,
         observation,
         action,
         reward,
+        done=False,
+        info=None
     ) -> int:
         """
         Returns the action with the highest reward for the current observation.
         """
-        self.brain.predict_reward(
+        return self.policy.get_predicted_reward(
+            next_observation,
             observation,
             action,
-            reward
+            reward,
+            done,
+            info,
         )
     
-    def model_reward(
-        self,
-        observation = None,
-    ) -> int:
-        image = self.reward_model.preprocess(observation)
-        # Get action probabilities from reward model
-        reward_logits = self.reward_model(image)
-        reward_probs = self.reward_model.post_process(reward_logits),
-        reward_pred = torch.argmax(
-            reward_probs,
-            dim=1
-        ).item()
-        logger.info(f"Reward predicted: {reward_pred}")
-        return reward_pred
-
     def select_action(
         self,
         observation,
         epsilon
     ):
-        return self.policy.get_action(
+        action = self.policy.get_predicted_action(
             observation,
-            self._env.action_space.n,
-            self._rewards_by_action_state,
             epsilon=epsilon
         )
+        logger.info("The agent selected action: {action}")
+        return action
 
     def update(
         self,
@@ -267,20 +172,20 @@ class Agent:
         Returns:
             None
         """
-        reward_grade = self.reward_fn(
+        reward_grade = self.predict_reward(
+            next_observation,
+            observation,
             action,
             reward,
-            observation,
-            next_observation,
-            epsilon=epsilon,
-            gamma=gamma
+            done=False,
+            info=None
         )
         self.memory.append(
-            StateActionRewardPacket(
+            MemoryPacket(
                 observation,
                 action,
                 reward_grade,
-                observation_info=ObservationInfoPacket(
+                info=ObservationInfo(
                     render_image=self._env.render()
                 )
             )
@@ -313,32 +218,33 @@ class Agent:
         rewards = torch.tensor([packet.reward for packet in self.memory])
         rewards = F.sigmoid(rewards)
         logger.info(f"Rewards configured for training: {rewards}")
-        image_tensor_list = [
-            torch.from_numpy(
-                packet.observation_info.render_image
-            ).to(device=self.device) for packet in self.memory
-        ]
-        logger.info(f"Image tensor list: {image_tensor_list}")
-        observations = torch.stack(image_tensor_list)
-        rewards += (1 if win_state else -1) * hindsight
-        # Compare the rewards to the model's prediction
-        self.reward_optimizer.zero_grad()
-        reward_logits = self.model_reward(observations)
-        reward_probs = self.model_reward.post_process(reward_logits)
-        reward_loss = self.reward_criterion(
-            reward_probs,
-            rewards
-        ) * (memory_length ** -1)
-        total_reward_loss = torch.sum(reward_loss) * (memory_length ** -1)
-        logger.info(f"Total rewards: {rewards}")
-        total_rewards = torch.sum(rewards).item() / memory_length
-        logger.info(f"Total rewards: {total_rewards}")
-        total_predicted_rewards = torch.sum(reward_probs).item() / memory_length
-        logger.info(f"Total predicted rewards: {total_predicted_rewards}")
-        logger.info(f"Total reward loss: {reward_loss.item()}")
-        loss_value = total_reward_loss.item()
-        total_reward_loss.backward()
-        self.reward_optimizer.step()
+        loss_value = 0
+        # image_tensor_list = [
+        #     torch.from_numpy(
+        #         packet.observation_info.render_image
+        #     ).to(device=self.device) for packet in self.memory
+        # ]
+        # logger.info(f"Image tensor list: {image_tensor_list}")
+        # observations = torch.stack(image_tensor_list)
+        # rewards += (1 if win_state else -1) * hindsight
+        # # Compare the rewards to the model's prediction
+        # self.reward_optimizer.zero_grad()
+        # reward_logits = self.model_reward(observations)
+        # reward_probs = self.model_reward.post_process(reward_logits)
+        # reward_loss = self.reward_criterion(
+        #     reward_probs,
+        #     rewards
+        # ) * (memory_length ** -1)
+        # total_reward_loss = torch.sum(reward_loss) * (memory_length ** -1)
+        # logger.info(f"Total rewards: {rewards}")
+        # total_rewards = torch.sum(rewards).item() / memory_length
+        # logger.info(f"Total rewards: {total_rewards}")
+        # total_predicted_rewards = torch.sum(reward_probs).item() / memory_length
+        # logger.info(f"Total predicted rewards: {total_predicted_rewards}")
+        # logger.info(f"Total reward loss: {reward_loss.item()}")
+        # loss_value = total_reward_loss.item()
+        # total_reward_loss.backward()
+        # self.reward_optimizer.step()
         return loss_value
 
     def train_actions(
@@ -356,23 +262,24 @@ class Agent:
             float: The total rewards in the window of memory
         """
         logger.info(f"Agenet memory before computing rewards: {self.memory}")
-        memory_length = len(self.memory)
-        actions = torch.tensor([packet.action for packet in self.memory])
-        logger.info(f"Queue length: {memory_length}")
-        observations = torch.stack([packet.render_images for packet in self.memory])
-        # Compare the rewards to the model's prediction
-        self.action_optimizer.zero_grad()
-        action_logits = self.model_action(observations)
-        action_probs = self.model_action.post_process(action_logits)
-        action_loss = self.action_criterion(
-            action_probs,
-            actions
-        )
-        total_action_loss = torch.sum(action_loss) * (memory_length ** -1)
-        loss_value = total_action_loss.item()
-        logger.info(f"Total action loss: {total_action_loss.item()}")
-        total_action_loss.backward()
-        self.action_optimizer.step()
+        loss_value = 0
+        # memory_length = len(self.memory)
+        # actions = torch.tensor([packet.action for packet in self.memory])
+        # logger.info(f"Queue length: {memory_length}")
+        # observations = torch.stack([packet.render_images for packet in self.memory])
+        # # Compare the rewards to the model's prediction
+        # self.action_optimizer.zero_grad()
+        # action_logits = self.model_action(observations)
+        # action_probs = self.model_action.post_process(action_logits)
+        # action_loss = self.action_criterion(
+        #     action_probs,
+        #     actions
+        # )
+        # total_action_loss = torch.sum(action_loss) * (memory_length ** -1)
+        # loss_value = total_action_loss.item()
+        # logger.info(f"Total action loss: {total_action_loss.item()}")
+        # total_action_loss.backward()
+        # self.action_optimizer.step()
         return loss_value
 
     def reset(self):

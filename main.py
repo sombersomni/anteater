@@ -13,7 +13,7 @@ from src.utils.file_tools import apply_action_to_files
 from src.utils.terminal import create_gym_arg_parser
 from src.utils.logs import setup_logger
 from src.env_wrappers.path_finder import PathFinderRewardWrapper
-from src.core.agent import Agent, StateActionRewardPacket, ObservationInfoPacket
+from src.core.agent import Agent, MemoryPacket, ObservationInfo
 
 
 logger = setup_logger("Gym Simulation", f"{__name__}.log")
@@ -80,13 +80,13 @@ class Simulator:
         idx = 0
         epsilon = starting_epsilon
         for episode in tqdm(range(episodes)):
-            observation, info = self.reset()
             num_steps_taken = 0
-            done = False
             epsilon = max(starting_epsilon, (episode / episodes) ** 2)
             total_rewards = 0
+            done = False
+            observation, info = self.reset()
             logger.info(f"Starting episode: {episode}")
-            while num_steps_taken < move_limit:
+            while not done and num_steps_taken < move_limit:
                 logger.info(f"Step: {num_steps_taken}")
                 logger.debug(f"Move limit: {move_limit}")
                 # step (transition) through the environment with the action
@@ -99,6 +99,7 @@ class Simulator:
                     epsilon
                 )
                 next_observation, reward, terminated, truncated, info = self.env.step(action)
+                done = terminated or truncated
                 self.agent.update(
                     reward,
                     observation,
@@ -110,30 +111,31 @@ class Simulator:
                 total_rewards += reward
                 # Get the current frame to render the environment
                 # If the episode has ended then we can reset to start a new episode
-                if terminated or truncated:
+                if done:
                     logger.info(f"Episode {episode} terminated with total reward: {total_rewards}.")
                     win_state = info.get("win_state", False)
                     # Add the final state to agent memory
                     self.agent.add_to_memory(
-                        StateActionRewardPacket(
+                        MemoryPacket(
                             next_observation,
                             action,
                             (1 if win_state else -1),
-                            observation_info=ObservationInfoPacket(
+                            observation_info=ObservationInfo(
                                 render_image=self.env.render()
-                            )
+                            ),
+                            done=done,
                         )
                     )
-                    total_reward_loss = self.agent.train_rewards(win_state=win_state)
-                    total_action_loss = self.agent.train_actions(win_state=win_state)
+                    # total_reward_loss = self.agent.train_rewards(win_state=win_state)
+                    # total_action_loss = self.agent.train_actions(win_state=win_state)
                     logger.info(f"Episode {episode} terminated with total reward: {total_rewards}.")
                     logger.info(f"Win state: {info.get('win_state', False)}")
                     logger.info(f"Total steps taken: {num_steps_taken}.")
                     if self.debug:
                         wandb.log({
                             "total_reward": total_rewards,
-                            "total_reward_loss": total_reward_loss,
-                            "total_action_loss": total_action_loss
+                            # "total_reward_loss": total_reward_loss,
+                            # "total_action_loss": total_action_loss
                         })
                     self.agent.reset()
                     idx += 1
@@ -168,7 +170,7 @@ def start_project():
                 "discount_factor": args.discount_factor,
                 "architecture": ARCHITECTURE,
                 "dataset": "FrozenLake-v1",
-                "episodes": args.num_episodes
+                "episodes": args.episodes
             }
         )
     agent = Agent(
@@ -189,7 +191,7 @@ def start_project():
     )
     try:
         simulator.start(
-            episodes=args.num_episodes,
+            episodes=args.episodes,
             move_limit=args.move_limit,
         )
     except KeyboardInterrupt:
