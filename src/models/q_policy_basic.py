@@ -1,6 +1,6 @@
 import torch
 from gymnasium import Env
-from typing import Protocol, List, Dict, Tuple, NewType
+from typing import Protocol, List, Dict, Tuple
 from collections import defaultdict
 from src.utils.logs import setup_logger
 
@@ -9,7 +9,7 @@ logger = setup_logger("QPolicyBasic", f"{__name__}.log")
 
 
 class ActionPolicy(Protocol):
-    def get_predicted_action(self, observation, env=None, epsilon=0.1) -> int:
+    def get_predicted_action(self, observation, epsilon=0.1) -> int:
         """
         Returns the action with the highest reward for the current observation.
         """
@@ -17,7 +17,16 @@ class ActionPolicy(Protocol):
 
 
 class RewardPolicy(Protocol):
-    def get_predicted_reward(self, observation, action, reward, done, info, env=None):
+    def get_predicted_reward(
+        self,
+        next_observation,
+        observation,
+        action,
+        reward,
+        done=False,
+        info=None,
+        lr: float = 0.1
+    ):
         """
         Calculates the Q-learning update for the rewards based on the
         current reward and the maximum future reward.
@@ -26,8 +35,11 @@ class RewardPolicy(Protocol):
 
 
 class QPolicy(ActionPolicy, RewardPolicy):
+    reward_state: Dict[Tuple[int, int], float]
+    action_space_size: int
     history: List
-
+    env: Env
+    gamma: float
 
     
 class QPolicyBasic(QPolicy):
@@ -102,7 +114,7 @@ class QPolicyBasic(QPolicy):
         action,
         reward,
         done,
-        info,
+        info=None,
         lr: float = 0.1
     ):
 
@@ -118,11 +130,3 @@ class QPolicyBasic(QPolicy):
         logger.info(f"New overall reward: {new_overall_reward}")
         self.update_reward_state(observation, action, new_overall_reward, done, info)
         return new_overall_reward
-
-    def loss(
-        self,
-        new_reward: int,
-        reward: int,
-        lr: float = 0.01  # we increase the learning rate over time
-    ):
-        return (1 - lr) * reward + lr * new_reward

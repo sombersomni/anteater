@@ -46,7 +46,7 @@ class Simulator:
         self,
         observation,
         epsilon=0.01,
-        gamma=0.9,
+        lr=0.1
     ):
         action = self.agent.select_action(
             observation,
@@ -58,8 +58,7 @@ class Simulator:
             observation,
             next_observation,
             action,
-            gamma=gamma,
-            epsilon=epsilon
+            lr=lr
         )
         return next_observation, reward, terminated, truncated, info
 
@@ -106,8 +105,8 @@ class Simulator:
                     observation,
                     next_observation,
                     action,
-                    gamma=gamma,
-                    epsilon=epsilon,
+                    done=done,
+                    info=info,
                     lr=lr
                 )
                 total_rewards += reward

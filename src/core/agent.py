@@ -120,7 +120,7 @@ class Agent:
     def select_action(
         self,
         observation,
-        epsilon
+        epsilon: float = 0.1
     ):
         action = self.policy.get_predicted_action(
             observation,
@@ -136,8 +136,7 @@ class Agent:
         next_observation,
         action: int,
         done: bool = False,
-        gamma=0.9,
-        epsilon=0.01,
+        info: Optional[ObservationInfo] = None,
         lr=0.1
     ):
         """
@@ -152,7 +151,7 @@ class Agent:
             next_observation (int): The next observation
             action (int): The current action
             gamma (float): The discount factor
-            epsilon (float): The learning rate
+            lr (float): The learning rate
 
         Returns:
             None
@@ -162,8 +161,8 @@ class Agent:
             observation,
             action,
             reward,
-            done=False,
-            info=None,
+            done=done,
+            info=info,
             lr=lr
         )
         self.memory.append(

@@ -33,7 +33,22 @@ class FakeGameEnv(Env):
 class QMockPolicy(QPolicy):
     def __init__(self, env: Env):
         self.reward_state: Dict[Tuple[int, int], float] = defaultdict(float)
-        self.action_space_size = env.action_space.n
+        self.action_space_size = 4
     
-QMockPolicy.get_predicted_reward = Mock(return_value=0)
-QMockPolicy.get_predicted_action = Mock(return_value=0)
+    def update_reward_state(self, observation, action, new_reward: float, done: bool, info):
+        self.reward_state[(observation, action)] += new_reward
+
+    def get_predicted_action(self, observation, epsilon=0.1, generator=None):
+        return 0
+    
+    def get_predicted_reward(
+        self,
+        next_observation,
+        observation,
+        action,
+        reward,
+        done,
+        info=None,
+        lr: float = 0.1
+    ):
+        return 0
