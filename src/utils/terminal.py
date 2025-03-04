@@ -8,7 +8,16 @@ def create_gym_arg_parser(
 ):
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument(
-        '--output_dir',
+        '--game-name',
+        type=str,
+        default='FrozenLake-v1',
+        help=(
+            'The name of the OpenAI gym environment to simulate '
+            '(default: FrozenLake-v1)'
+        )
+    )
+    parser.add_argument(
+        '--output-dir',
         type=str,
         default=output_dir,
         help='The directory where the gym render images for your episodes will be saved'
