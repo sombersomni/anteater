@@ -1,13 +1,11 @@
 import torch
 from gymnasium import Env
 from typing import Protocol, List, Dict, Tuple, NewType
+from collections import defaultdict
 from src.utils.logs import setup_logger
 
 
 logger = setup_logger("QPolicyBasic", f"{__name__}.log")
-
-
-RewardMapping = NewType("RewardMapping", Dict[Tuple[int, int], float])
 
 
 class ActionPolicy(Protocol):
@@ -31,16 +29,17 @@ class QPolicy(ActionPolicy, RewardPolicy):
     history: List
 
 
+    
 class QPolicyBasic(QPolicy):
     def __init__(self, env: Env, gamma: float = 0.9, generator = None):
-        self.reward_state: RewardMapping = {}
+        self.reward_state: Dict[Tuple[int, int], float] = defaultdict(float)
         self.action_space_size = env.action_space.n
         self.generator = generator if generator else torch.Generator().manual_seed(101)
         self.env = env
         self.gamma = gamma
 
     def update_reward_state(self, observation, action, new_reward: float, done: bool, info):
-        self.reward_state[(observation, action)] = new_reward
+        self.reward_state[(observation, action)] += new_reward
 
     def get_all_rewards_for_observation(self, observation):
         return [
@@ -61,13 +60,14 @@ class QPolicyBasic(QPolicy):
         prob = torch.rand(1, generator=self.generator).item()
         if prob > epsilon:
             logger.info(f"Selecting a random action based on epsilon-greedy policy")
-            action = self.env.action_space.sample()
+            action = self.env.action_space.sample().item()
         else:
             logger.info(f"Selecting the maximum reward action")
             action = torch.argmax(
                 torch.tensor(self.get_all_rewards_for_observation(observation))
             ).item()
         logger.info(f"Selected action: {action}")
+        print(type(action))
         return action
 
     def get_reward(

@@ -32,6 +32,12 @@ def create_gym_arg_parser(
         help='The learning rate for the reward function'
     )
     parser.add_argument(
+        '--epsilon',
+        type=float,
+        default=0.01,
+        help='The epsilon value for the epsilon-greedy policy if applicable'
+    )
+    parser.add_argument(
         '--debug',
         type=bool,
         default=False,

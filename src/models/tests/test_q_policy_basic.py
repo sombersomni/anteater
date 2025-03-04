@@ -3,33 +3,20 @@ import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
 from models.q_policy_basic import QPolicyBasic
-
-class FakeGameEnv(gym.Env):
-    def __init__(self):
-        super(FakeGameEnv, self).__init__()
-        # The action space will be 0 to 3 and represent 0. UP, 1. LEFT, 2. DOWN, 3. RIGHT
-        self.action_space = spaces.Discrete(4)
-        # The observation space will represent 4 x 4 grid for the player to move.
-        self.observation_space = spaces.Discrete(16)
-        self.num_steps = 0
-
-    def step(self, action):
-        observation = self.observation_space.sample()
-        reward = 1 if observation == 1 else 0  # Example reward
-        terminated = False  # Replace with your termination logic
-        truncated = self.num_steps >= 100  # Example termination condition
-        info = {}  # Add any extra info
-        self.num_steps += 1
-        return observation, reward, terminated, truncated, info
-
-    def reset(self, seed=None, options=None):
-        super().reset(seed=seed)
-        return self.observation_space.sample(), {}
+from models.mocks import FakeGameEnv, QMockPolicy
 
 
 class TestQPolicyBasic(unittest.TestCase):
     def setUp(self):
         self.env = FakeGameEnv()
+    
+    def test_protocol(self):
+        policy = QPolicyBasic(
+            self.env.action_space,
+            env=self.env,
+            gamma=0.9
+        )
+        self.assertIsInstance(policy, QPolicyBasic)
 
     def test_get_action_max(self):
         observation = 0
@@ -50,8 +37,8 @@ class TestQPolicyBasic(unittest.TestCase):
             gamma=0.9
         )
         observation = 0
-        action = 0
-        reward = policy.get_reward(observation, action)
+        action = 1
+        reward = policy.get_predicted_reward(observation, action, 1, False, {})
         self.assertEqual(reward, 0)  # Check the reward is within the action space
 
     def test_get_max_reward(self):

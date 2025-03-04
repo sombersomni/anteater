@@ -18,7 +18,7 @@ from src.core.agent import Agent, MemoryPacket, ObservationInfo
 logger = setup_logger("Gym Simulation", f"{__name__}.log")
 
 
-GAMMA_FACTOR = 0.9
+
 ARCHITECTURE = "Greedy"
 EPOCHS = 100
 
@@ -74,7 +74,7 @@ class Simulator:
         self,
         episodes: int = 1,
         move_limit: int = 10,
-        gamma: float = GAMMA_FACTOR,
+        gamma: float = 0.95,
         starting_epsilon: float = 0.01,
         lr: float = 0.1
     ):
@@ -169,7 +169,11 @@ def start_project():
                 "discount_factor": args.discount_factor,
                 "architecture": ARCHITECTURE,
                 "dataset": "FrozenLake-v1",
-                "episodes": args.episodes
+                "episodes": args.episodes,
+                "move_limit": args.move_limit,
+                "lr": args.lr,
+                "epsilon": 0.01,
+                "gamma": args.discount_factor,
             }
         )
     agent = Agent(
@@ -192,6 +196,9 @@ def start_project():
         simulator.start(
             episodes=args.episodes,
             move_limit=args.move_limit,
+            gamma=args.discount_factor,
+            starting_epsilon=args.epsilon,
+            lr=args.lr
         )
     except KeyboardInterrupt:
         logger.info("Stopped by user.")

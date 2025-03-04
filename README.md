@@ -6,6 +6,6 @@ Anteater is a development tool for assisting in RL research for games with long 
 
 You can run the "FrozenLake" test in main to see an example of Temporal Difference Q Learning in action.
 
-`python3 main.py --num-episodes=100 --render_mode=human --move-limit=30`
+`python3 main.py --episodes=100 --render_mode=human --move-limit=30`
 
 >Render mode on human will slow your training down.
