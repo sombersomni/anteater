@@ -1,10 +1,13 @@
 import torch
 from gymnasium import Env
-from dataclasses import dataclass
-from typing import Protocol, List, Dict, Tuple, Any
+from typing import Protocol, List, Dict, Tuple, NewType
 from src.utils.logs import setup_logger
 
+
 logger = setup_logger("QPolicyBasic", f"{__name__}.log")
+
+
+RewardMapping = NewType("RewardMapping", Dict[Tuple[int, int], float])
 
 
 class ActionPolicy(Protocol):
@@ -30,8 +33,7 @@ class QPolicy(ActionPolicy, RewardPolicy):
 
 class QPolicyBasic(QPolicy):
     def __init__(self, env: Env, gamma: float = 0.9, generator = None):
-        self.reward_state: Dict[Tuple[int, int], float] = {}
-        self.action_space = torch.tensor([i for i in range(env.action_space.n)])
+        self.reward_state: RewardMapping = {}
         self.action_space_size = env.action_space.n
         self.generator = generator if generator else torch.Generator().manual_seed(101)
         self.env = env
@@ -39,6 +41,12 @@ class QPolicyBasic(QPolicy):
 
     def update_reward_state(self, observation, action, new_reward: float, done: bool, info):
         self.reward_state[(observation, action)] = new_reward
+
+    def get_all_rewards_for_observation(self, observation):
+        return [
+            self.get_reward(observation, action)
+            for action in range(self.action_space_size)
+        ]
 
     def get_predicted_action(
         self,
@@ -49,23 +57,18 @@ class QPolicyBasic(QPolicy):
         Returns the action with the highest reward for the current observation.
         If no reward exists for the current observation, returns a random action.
         """
-        if torch.rand(1, generator=self.generator).item() < epsilon:
-            return torch.randint(
-                0,
-                self.action_space_size,
-                (1,),
-                generator=self.generator
+        action = None
+        prob = torch.rand(1, generator=self.generator).item()
+        if prob > epsilon:
+            logger.info(f"Selecting a random action based on epsilon-greedy policy")
+            action = self.env.action_space.sample()
+        else:
+            logger.info(f"Selecting the maximum reward action")
+            action = torch.argmax(
+                torch.tensor(self.get_all_rewards_for_observation(observation))
             ).item()
-        
-        max_idx = torch.argmax(
-            torch.tensor(
-                [
-                  self.get_reward(observation, action.item())
-                  for action in self.action_space
-                ]
-            )
-        ).item()
-        return self.action_space[max_idx].item()
+        logger.info(f"Selected action: {action}")
+        return action
 
     def get_reward(
         self,
@@ -89,12 +92,7 @@ class QPolicyBasic(QPolicy):
         If no reward exists for the current observation, returns a random action.
         """
         return torch.max(
-            torch.tensor(
-                [
-                  self.get_reward(observation, action.item())
-                  for action in self.action_space
-                ]
-            )
+            torch.tensor(self.get_all_rewards_for_observation(observation))
         ).item()
 
     def get_predicted_reward(
@@ -105,7 +103,7 @@ class QPolicyBasic(QPolicy):
         reward,
         done,
         info,
-        lr: float = 0.01
+        lr: float = 0.1
     ):
 
         """
@@ -119,7 +117,7 @@ class QPolicyBasic(QPolicy):
         new_overall_reward = (1 - lr) * reward + lr * new_reward
         logger.info(f"New overall reward: {new_overall_reward}")
         self.update_reward_state(observation, action, new_overall_reward, done, info)
-        return 
+        return new_overall_reward
 
     def loss(
         self,

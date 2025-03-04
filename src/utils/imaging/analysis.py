@@ -1,72 +1,66 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from sklearn.decomposition import PCA
 
-def visualize_top_pca_components(image, n_components=5):
+def pca_image_analysis(image):
     """
-    Perform PCA on a grayscale image and visualize the top 5 principal components
-    as both 1D line plots and 2D grid images.
+    Perform PCA on an image and display 2D reconstructions using the top 5, top 10,
+    bottom 5, and bottom 10 principal components.
     
     Parameters:
-    - image: 2D NumPy array (height x width) representing a grayscale image
-    - n_components: Number of principal components to visualize (default=5)
+    image : numpy.ndarray
+        A 2D numpy array representing a grayscale image of shape (M, N).
     """
+    # Compute the mean row of the image
+    mean_row = np.mean(image, axis=0)
     
-    # Ensure the image is a 2D array (grayscale)
-    if len(image.shape) != 2:
-        raise ValueError("Input must be a 2D grayscale image (1 channel).")
+    # Center the image by subtracting the mean row from each row
+    image_centered = image - mean_row
     
-    height, width = image.shape
+    # Perform Singular Value Decomposition (SVD) on the centered image
+    U, S, Vt = np.linalg.svd(image_centered, full_matrices=False)
     
-    # Standardize the image data (zero mean, unit variance) for PCA
-    image_standardized = (image - np.mean(image)) / np.std(image)
+    # Reconstruct the image using the top 5 components
+    I_top_5 = U[:, :5] @ np.diag(S[:5]) @ Vt[:5, :] + mean_row
     
-    # Apply PCA, treating rows as samples and pixels in each row as features
-    pca = PCA(n_components=n_components)
-    pca.fit(image_standardized)  # Shape: (height, width)
+    # Reconstruct the image using the top 10 components
+    I_top_10 = U[:, :10] @ np.diag(S[:10]) @ Vt[:10, :] + mean_row
     
-    # Get the principal components (eigenvectors)
-    components = pca.components_  # Shape: (n_components, width)
+    # Reconstruct the image using the bottom 5 components
+    I_bottom_5 = U[:, -5:] @ np.diag(S[-5:]) @ Vt[-5:, :] + mean_row
     
-    # Explained variance ratio for context
-    explained_variance = pca.explained_variance_ratio_
+    # Reconstruct the image using the bottom 10 components
+    I_bottom_10 = U[:, -10:] @ np.diag(S[-10:]) @ Vt[-10:, :] + mean_row
     
-    # Create a figure with two rows: 1D plots (top) and 2D images (bottom)
-    plt.figure(figsize=(15, 6))
+    # Create a 2x2 subplot to display the reconstructed images
+    fig, axs = plt.subplots(2, 2, figsize=(10, 10))
     
-    # First row: 1D line plots of components
-    for i in range(n_components):
-        plt.subplot(2, n_components, i + 1)
-        plt.plot(components[i], color='black')
-        plt.title(f'PC {i+1}\nVar: {explained_variance[i]:.3f}')
-        plt.xlabel('Pixel Index')
-        plt.ylabel('Component Value')
-        plt.grid(True)
+    # Display reconstruction with top 5 components
+    axs[0, 0].imshow(I_top_5, cmap='gray')
+    axs[0, 0].set_title('Top 5 Components')
     
-    # Second row: 2D grid images of components
-    for i in range(n_components):
-        # Reshape the component to a 2D form
-        # Since components are (width,) vectors, we need to interpret them spatially
-        # For visualization, we'll repeat or reshape based on context
-        component_2d = components[i].reshape(1, width)  # Treat as a single row
-        plt.subplot(2, n_components, n_components + i + 1)
-        plt.imshow(component_2d, cmap='gray', aspect='auto')
-        plt.title(f'PC {i+1} (2D)')
-        plt.axis('off')  # Hide axes for cleaner display
+    # Display reconstruction with top 10 components
+    axs[0, 1].imshow(I_top_10, cmap='gray')
+    axs[0, 1].set_title('Top 10 Components')
     
-    plt.tight_layout()
+    # Display reconstruction with bottom 5 components
+    axs[1, 0].imshow(I_bottom_5, cmap='gray')
+    axs[1, 0].set_title('Bottom 5 Components')
+    
+    # Display reconstruction with bottom 10 components
+    axs[1, 1].imshow(I_bottom_10, cmap='gray')
+    axs[1, 1].set_title('Bottom 10 Components')
+    
+    # Remove axes for better visualization
+    for ax in axs.flat:
+        ax.axis('off')
+    
+    # Show the plot
     plt.show()
 
-# Example usage with a synthetic image
+
 if __name__ == "__main__":
-    import cv2
-    from src.utils.imaging.read_image import read_cv2_image
-    # Read an image from disk
-    image_path = "out/frame_001.png"
-    image = read_cv2_image(image_path, cv2.IMREAD_GRAYSCALE)
-    # Change to black and white
-    image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    # cast to a float32
-    image = image.astype(np.float32)
-    # Call the function
-    visualize_top_pca_components(image)
+    # Create a random grayscale image of size 100x100
+    image = np.random.randint(0, 256, (100, 100)).astype(np.float32)
+    
+    # Perform PCA analysis on the image
+    pca_image_analysis(image)

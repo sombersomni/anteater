@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from typing import Dict, Tuple
 
+
 def get_reward_action_heatmaps(
     reward_dict: Dict[Tuple[int, int], float],
     num_actions: int,

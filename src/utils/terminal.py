@@ -26,7 +26,13 @@ def create_gym_arg_parser(
         help='The discount factor for the reward function (gamma)'
     )
     parser.add_argument(
-        '--wb-debug',
+        '--lr',
+        type=float,
+        default=0.1,
+        help='The learning rate for the reward function'
+    )
+    parser.add_argument(
+        '--debug',
         type=bool,
         default=False,
         help='The debug flag to enable WandB metrics'

@@ -1,15 +1,10 @@
 import wandb
 import torch
-from torch import nn
-from torch import optim
 import torch.nn.functional as F
 from gymnasium import Env
-import numpy as np
-from functools import partial
-from typing import Dict, Tuple, NewType, Callable, Any, Optional, List
+from typing import Any, Optional, List
 from dataclasses import dataclass
 
-from collections import defaultdict
 from src.utils.logs import setup_logger
 from src.utils.plotting import get_reward_action_heatmaps
 from src.storage.base import ImageStorage
@@ -18,12 +13,12 @@ from src.models.q_policy_basic import QPolicy, QPolicyBasic
 logger = setup_logger("Gym Simulation", f"{__name__}.log")
 
 
-RewardMapping = NewType("RewardMapping", Dict[Tuple[int, int], float])
-
-
 @dataclass
 class ObservationInfo:
     render_image: torch.Tensor
+
+    def __str__(self):
+        return f"ObservationInfo: img_shape={self.render_image.shape}"
 
 
 @dataclass
@@ -34,6 +29,8 @@ class MemoryPacket:
     info: Optional[ObservationInfo] = None
     done: bool = False
 
+    def __str__(self):
+        return f"MemoryPacket: obs:{self.observation}, act:{self.action}, reward:{self.reward}"
 
 
 def format_packets_to_image_batch(
@@ -54,22 +51,6 @@ def format_packets_to_image_batch(
     if images.dim() == 2:
         images = images.unsqueeze(1).unsqueeze(0)
     return images
-
-
-# def image_reward_policy(
-#     reward_model: ResNet16,
-#     image: torch.Tensor
-# ):
-#     C, W, H = image.shape
-#     images = image.reshape(1, C, W, H)
-#     # Get predicted reward (Q-value) from reward model
-#     reward_logits = reward_model(images)
-#     reward_probs = reward_model.post_process(reward_logits),
-#     reward_pred = torch.argmax(
-#         reward_probs,
-#         dim=1
-#     ).item()
-#     return reward_pred
 
 
 class Agent:
@@ -120,7 +101,8 @@ class Agent:
         action,
         reward,
         done=False,
-        info=None
+        info=None,
+        lr=0.1
     ) -> int:
         """
         Returns the action with the highest reward for the current observation.
@@ -132,6 +114,7 @@ class Agent:
             reward,
             done,
             info,
+            lr=lr
         )
     
     def select_action(
@@ -143,7 +126,7 @@ class Agent:
             observation,
             epsilon=epsilon
         )
-        logger.info("The agent selected action: {action}")
+        logger.info(f"ObservationInfo action: {action}")
         return action
 
     def update(
@@ -152,8 +135,10 @@ class Agent:
         observation,
         next_observation,
         action: int,
+        done: bool = False,
         gamma=0.9,
-        epsilon=0.01
+        epsilon=0.01,
+        lr=0.1
     ):
         """
         Calculates the new reward based on the previous reward
@@ -178,7 +163,8 @@ class Agent:
             action,
             reward,
             done=False,
-            info=None
+            info=None,
+            lr=lr
         )
         self.memory.append(
             MemoryPacket(
@@ -187,11 +173,13 @@ class Agent:
                 reward_grade,
                 info=ObservationInfo(
                     render_image=self._env.render()
-                )
+                ),
+                done=done
             )
         )
+        return reward_grade
 
-    def train_rewards(
+    def compute_loss(
         self,
         win_state: bool = False,
         lr=0.1
@@ -208,96 +196,35 @@ class Agent:
         Returns:
             float: The total rewards in the window of memory
         """
-        logger.info(f"Agenet memory before computing rewards: {self.memory}")
+        logger.info(f"Agent memory before computing rewards: {tuple(str(m) for m in self.memory)}")
         memory_length = len(self.memory)
         logger.info(f"Queue length: {memory_length}")
         hindsight = torch.pow(
             torch.linspace(0, 1, steps=memory_length),
             2
         )
-        rewards = torch.tensor([packet.reward for packet in self.memory])
-        rewards = F.sigmoid(rewards)
-        logger.info(f"Rewards configured for training: {rewards}")
-        loss_value = 0
-        # image_tensor_list = [
-        #     torch.from_numpy(
-        #         packet.observation_info.render_image
-        #     ).to(device=self.device) for packet in self.memory
-        # ]
-        # logger.info(f"Image tensor list: {image_tensor_list}")
-        # observations = torch.stack(image_tensor_list)
-        # rewards += (1 if win_state else -1) * hindsight
-        # # Compare the rewards to the model's prediction
-        # self.reward_optimizer.zero_grad()
-        # reward_logits = self.model_reward(observations)
-        # reward_probs = self.model_reward.post_process(reward_logits)
-        # reward_loss = self.reward_criterion(
-        #     reward_probs,
-        #     rewards
-        # ) * (memory_length ** -1)
-        # total_reward_loss = torch.sum(reward_loss) * (memory_length ** -1)
-        # logger.info(f"Total rewards: {rewards}")
-        # total_rewards = torch.sum(rewards).item() / memory_length
-        # logger.info(f"Total rewards: {total_rewards}")
-        # total_predicted_rewards = torch.sum(reward_probs).item() / memory_length
-        # logger.info(f"Total predicted rewards: {total_predicted_rewards}")
-        # logger.info(f"Total reward loss: {reward_loss.item()}")
-        # loss_value = total_reward_loss.item()
-        # total_reward_loss.backward()
-        # self.reward_optimizer.step()
-        return loss_value
+        hindsight = (1 if win_state else -1) * hindsight
+        for idx, packet in enumerate(self.memory):
+            print(packet)
+            self.policy.reward_state[(packet.observation, packet.action)] += hindsight[idx].item()
+        logger.info(f"Agent memory after computing rewards: {tuple(str(m) for m in self.memory)}")
 
-    def train_actions(
-        self,
-        win_state: bool = False,
-        lr=0.1
-    ):
-        """
-        Updates the action model based on the current memory of packets.
-        The action model is trained to predict the action to take
-        Args:
-            win_state (bool): Did the agent win the game?
-
-        Returns:
-            float: The total rewards in the window of memory
-        """
-        logger.info(f"Agenet memory before computing rewards: {self.memory}")
-        loss_value = 0
-        # memory_length = len(self.memory)
-        # actions = torch.tensor([packet.action for packet in self.memory])
-        # logger.info(f"Queue length: {memory_length}")
-        # observations = torch.stack([packet.render_images for packet in self.memory])
-        # # Compare the rewards to the model's prediction
-        # self.action_optimizer.zero_grad()
-        # action_logits = self.model_action(observations)
-        # action_probs = self.model_action.post_process(action_logits)
-        # action_loss = self.action_criterion(
-        #     action_probs,
-        #     actions
-        # )
-        # total_action_loss = torch.sum(action_loss) * (memory_length ** -1)
-        # loss_value = total_action_loss.item()
-        # logger.info(f"Total action loss: {total_action_loss.item()}")
-        # total_action_loss.backward()
-        # self.action_optimizer.step()
-        return loss_value
-
-    def reset(self):
+    def reset(self, current_episode: int = 0):
         logger.info("Clearing observation/action memory")
-        self.before_reset_hook()
+        self.before_reset_hook(current_episode=current_episode)
         self.memory = []
 
     def log_metrics(self):
         if self.debug:
-            # wandb.log({
-            #     "train/obs-reward-heatmap": wandb.Image(
-            #         get_reward_action_heatmaps(
-            #             self._rewards_by_action_state,
-            #             num_actions=self._env.action_space.n,
-            #             grid_size=4
-            #         )
-            #     )
-            # })
+            wandb.log({
+                "train/obs-reward-heatmap": wandb.Image(
+                    get_reward_action_heatmaps(
+                        self.policy.reward_state,
+                        num_actions=self._env.action_space.n,
+                        grid_size=4
+                    )
+                )
+            })
             logger.info("Logging metrics to wandb")
 
     def __str__(self):

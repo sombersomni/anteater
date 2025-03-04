@@ -1,5 +1,4 @@
 import wandb
-import torch
 from gymnasium import Env
 from tqdm import tqdm
 from gymnasium.envs.toy_text.frozen_lake import (
@@ -64,7 +63,8 @@ class Simulator:
         )
         return next_observation, reward, terminated, truncated, info
 
-    def reset(self):
+    def reset(self, current_episode: int = 0):
+        self.agent.reset(current_episode=current_episode)
         return self.env.reset()
 
     def render(self):
@@ -75,7 +75,8 @@ class Simulator:
         episodes: int = 1,
         move_limit: int = 10,
         gamma: float = GAMMA_FACTOR,
-        starting_epsilon: float = 0.01
+        starting_epsilon: float = 0.01,
+        lr: float = 0.1
     ):
         idx = 0
         epsilon = starting_epsilon
@@ -84,9 +85,9 @@ class Simulator:
             epsilon = max(starting_epsilon, (episode / episodes) ** 2)
             total_rewards = 0
             done = False
-            observation, info = self.reset()
-            logger.info(f"Starting episode: {episode}")
+            observation, info = self.reset(current_episode=episode)
             while not done and num_steps_taken < move_limit:
+                logger.info(f"Episode: {episode}")
                 logger.info(f"Step: {num_steps_taken}")
                 logger.debug(f"Move limit: {move_limit}")
                 # step (transition) through the environment with the action
@@ -106,7 +107,8 @@ class Simulator:
                     next_observation,
                     action,
                     gamma=gamma,
-                    epsilon=epsilon
+                    epsilon=epsilon,
+                    lr=lr
                 )
                 total_rewards += reward
                 # Get the current frame to render the environment
@@ -119,25 +121,22 @@ class Simulator:
                         MemoryPacket(
                             next_observation,
                             action,
-                            (1 if win_state else -1),
-                            observation_info=ObservationInfo(
+                            reward,
+                            info=ObservationInfo(
                                 render_image=self.env.render()
                             ),
-                            done=done,
+                            done=done
                         )
                     )
-                    # total_reward_loss = self.agent.train_rewards(win_state=win_state)
-                    # total_action_loss = self.agent.train_actions(win_state=win_state)
+                    total_reward_loss = self.agent.compute_loss(win_state=win_state)
                     logger.info(f"Episode {episode} terminated with total reward: {total_rewards}.")
                     logger.info(f"Win state: {info.get('win_state', False)}")
                     logger.info(f"Total steps taken: {num_steps_taken}.")
                     if self.debug:
                         wandb.log({
-                            "total_reward": total_rewards,
-                            # "total_reward_loss": total_reward_loss,
-                            # "total_action_loss": total_action_loss
+                            "train/total_reward": total_rewards,
+                            "train/total_reward_loss": total_reward_loss
                         })
-                    self.agent.reset()
                     idx += 1
                     num_steps_taken += 1
                     observation = next_observation
@@ -159,7 +158,7 @@ def start_project():
         )
     )
     # start a new wandb run to track this script
-    if args.wb_debug:
+    if args.debug:
         wandb.init(
             # set the wandb entity where your project will be logged (generally your team name)
             entity="sombersomni-sloparse-labs",
@@ -175,12 +174,12 @@ def start_project():
         )
     agent = Agent(
         env=wrapped_env,
-        debug=args.wb_debug
+        debug=args.debug
     )
     simulator = Simulator(
         env=wrapped_env,
         agent=agent,
-        debug=args.wb_debug
+        debug=args.debug
     )
     # Create the output directory if it does not exist
     os.makedirs(args.output_dir, exist_ok=True)
@@ -200,7 +199,7 @@ def start_project():
         logger.warning(f"Error: {e}")
         sys.exit(1)
     finally:
-        if args.wb_debug:
+        if args.debug:
             wandb.finish()
         wrapped_env.close()
         cv2.destroyAllWindows()
