@@ -85,8 +85,7 @@ class Simulator:
                     observation,
                     epsilon
                 )
-                next_observation, reward, terminated, truncated, info = self.env.step(action)
-                done = terminated or truncated
+                next_observation, reward, done, info = self.env.step(action)
                 self.agent.update(
                     reward,
                     observation,

@@ -1,5 +1,6 @@
 import torch
 from gymnasium import Env
+from gymnasium.spaces.discrete import Discrete
 from typing import Protocol, List, Dict, Tuple
 from collections import defaultdict
 from src.utils.logs import setup_logger
@@ -36,7 +37,6 @@ class RewardPolicy(Protocol):
 
 class QPolicy(ActionPolicy, RewardPolicy):
     reward_state: Dict[Tuple[int, int], float]
-    action_space_size: int
     history: List
     env: Env
     gamma: float
@@ -44,8 +44,11 @@ class QPolicy(ActionPolicy, RewardPolicy):
     
 class QPolicyBasic(QPolicy):
     def __init__(self, env: Env, gamma: float = 0.9, generator = None):
-        self.reward_state: Dict[Tuple[int, int], float] = defaultdict(float)
+        print("QPolicyBasic", env.action_space, type(env.action_space))
+        if not isinstance(env.action_space, Discrete):
+            raise ValueError("Only Discrete action spaces are supported")
         self.action_space_size = env.action_space.n
+        self.reward_state: Dict[Tuple[int, int], float] = defaultdict(float)
         self.generator = generator if generator else torch.Generator().manual_seed(101)
         self.env = env
         self.gamma = gamma
@@ -79,7 +82,6 @@ class QPolicyBasic(QPolicy):
                 torch.tensor(self.get_all_rewards_for_observation(observation))
             ).item()
         logger.info(f"Selected action: {action}")
-        print(type(action))
         return action
 
     def get_reward(

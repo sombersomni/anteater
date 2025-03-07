@@ -1,27 +1,25 @@
-from gym import Env
+from gymnasium import Wrapper
 
-from src.utils.logging import setup_logger
+from src.utils.logs import setup_logger
 
 
 logger = setup_logger("Simulator Environment", f"{__name__}.log")
 
 
-class SimulatorEnv(Env):
+class SimulatorWrapper(Wrapper):
+    def __init__(self, env):
+        super().__init__(env)
 
     def render(self, mode="human"):
         observation = None
         try:
-            observation = self.render(mode=mode)
+            observation = super().render(mode=mode)
         except Exception as e:
-            logger.info("Environment doesn't support rendering on mode. Run rendering normally.")
-            observation = self.render()
-            if observation is None:
-                logger.info("Environment doesn't support rendering.")
+            observation = super().render()
         return observation
 
-
     def step(self, action):
-        step_tuple = self.step(action)
+        step_tuple = super().step(action)
         if step_tuple is None:
             logger.info("Environment doesn't support step.")
             raise NotImplementedError("Environment doesn't support step.")
@@ -32,4 +30,3 @@ class SimulatorEnv(Env):
             return observation, reward, done, info
         logger.info("We can assume the environment is combining terminated and truncated.")
         return step_tuple
- 

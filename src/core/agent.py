@@ -1,6 +1,5 @@
 import wandb
 import torch
-import torch.nn.functional as F
 from gymnasium import Env
 from typing import Any, Optional, List
 from dataclasses import dataclass
@@ -16,7 +15,6 @@ logger = setup_logger("Gym Simulation", f"{__name__}.log")
 @dataclass
 class ObservationInfo:
     render_image: torch.Tensor
-
     def __str__(self):
         return f"ObservationInfo: img_shape={self.render_image.shape}"
 
@@ -28,7 +26,6 @@ class MemoryPacket:
     reward: float
     info: Optional[ObservationInfo] = None
     done: bool = False
-
     def __str__(self):
         return f"MemoryPacket: obs:{self.observation}, act:{self.action}, reward:{self.reward}"
 

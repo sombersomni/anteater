@@ -26,7 +26,7 @@ class PathFinderRewardWrapper(Wrapper):
         self.max_steps = grid_size ** 2
     
     def step(self, action):
-        obs, reward, terminated, truncated, info = self.env.step(action)
+        obs, reward, terminated, truncated, info = super().step(action)
         row, col = obs % self.grid_size, obs // self.grid_size
         agent_current_position = np.array((row, col))
         agent_goal_position = np.array(self.goal_position)
@@ -40,9 +40,9 @@ class PathFinderRewardWrapper(Wrapper):
         )
         return obs, new_reward, terminated, truncated, info
 
-    def reset(self):
+    def reset(self, **kwargs):
         self._visited.clear()
-        return self.env.reset()
+        return super().reset(**kwargs)
 
     def render(self):
-        return self.env.render()
+        return super().render()
