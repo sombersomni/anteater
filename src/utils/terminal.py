@@ -8,7 +8,7 @@ def create_gym_arg_parser(
 ):
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument(
-        '--game-name',
+        '--game',
         type=str,
         default='FrozenLake-v1',
         help=(

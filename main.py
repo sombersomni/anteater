@@ -43,8 +43,8 @@ GAME_MAPPING_BY_NAME = {
 
 def get_game_environment_builder(args):
     def default_get_game_builder(args):
-        return gym.make(args.game_name, render_mode=args.render_mode)
-    return GAME_MAPPING_BY_NAME.get(args.game_name, default_get_game_builder)
+        return gym.make(args.game, render_mode=args.render_mode)
+    return GAME_MAPPING_BY_NAME.get(args.game, default_get_game_builder)
 
 
 def initialize():
@@ -63,12 +63,12 @@ def run():
             # set the wandb entity where your project will be logged (generally your team name)
             entity="sombersomni-sloparse-labs",
             # set the wandb project where this run will be logged
-            project=args.game_name,
+            project=args.game,
             # track hyperparameters and run metadata
             config={
                 "discount_factor": args.discount_factor,
                 "architecture": ARCHITECTURE,
-                "dataset": args.game_name,
+                "dataset": args.game,
                 "episodes": args.episodes,
                 "move_limit": args.move_limit,
                 "lr": args.lr,
