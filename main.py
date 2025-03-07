@@ -16,6 +16,7 @@ from src.env_wrappers.path_finder import PathFinderRewardWrapper
 from src.core.agent import Agent
 from src.core.simulator import Simulator
 
+from nes_py import NESEnv
 
 logger = setup_logger("Gym Simulation", f"{__name__}.log")
 
@@ -37,7 +38,8 @@ GAME_MAPPING_BY_NAME = {
         render_mode=args.render_mode,
         lap_complete_percent=0.95,
         domain_randomize=False
-    )
+    ),
+    "Zelda": lambda args: NESEnv('./roms/the-legend-of-zelda.nes')
 }
 
 
